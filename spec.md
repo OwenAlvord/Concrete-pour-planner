@@ -236,3 +236,25 @@ Out of scope
 - Unit conversion
 - Geocoding
 - User accounts
+
+Build Stages
+
+1. **Basic page and mockup**
+   - Build the single-page layout, input fields with defaults, summary cards, timeline placeholder, order box, responsive styling, and example hint.
+   - Test that desktop and mobile layouts stack correctly, labels are clear, defaults appear, and input validation messages display.
+
+2. **Map and slab drawing**
+   - Add Leaflet, Esri imagery, attribution, the BYU-centered example slab, typed rectangles, drawing controls, and draggable corners.
+   - Test typed 40 × 60 and 20 × 20 rectangles, polygon completion/canceling, corner dragging, and invalid or incomplete outlines.
+
+3. **Concrete and truck calculations**
+   - Add slab-area calculation, volume rounding, truckload splitting, unload times, truck rotation, arrival times, and finish-time calculations.
+   - Test both validation examples, the partial 7-cy truckload, cyclic assignments, midnight rollover, and updates after input changes.
+
+4. **Truck schedule and order summary**
+   - Add the Gantt-style timeline, truck/load labels, hover and keyboard details, and plain-text copyable order summary.
+   - Test the 40 × 60 schedule, arrival spacing, distinct timeline phases, cyclic trucks, Copy success, and Copy failure feedback.
+
+5. **Final testing and polish**
+   - Verify accessibility, responsive behavior, invalid-input handling, immediate updates, and map label output.
+   - Test all specification examples, geographic area tolerance, changing every input, mobile layout, keyboard use, and final copy or timeline output.
