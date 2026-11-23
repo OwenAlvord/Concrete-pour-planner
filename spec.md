@@ -291,3 +291,36 @@ Test cases:
 - With the `47.0 cy` order and the short-load fee blank, verify that the total is `$7,050`.
 - Change price, fee, slab dimensions, thickness, waste, and truck capacity; verify the estimate and breakdown update immediately, and that the fee is charged only once when the final load is partial.
 - Verify that blank or negative prices and negative fees show inline errors and clear only the cost estimate. Verify that a blank or zero fee is accepted as no fee.
+
+## Feature 2: Concrete Set-Time Checker
+
+Inputs:
+
+- Available working time, entered in minutes. Leave it blank by default because the planner cannot assume a project-specific working-time limit.
+- When entered, the value must be a finite decimal greater than `0`.
+- Show inline validation for invalid values. A blank or invalid checker input clears or withholds only the checker result; otherwise-valid pour quantity, schedule, and cost results remain available.
+
+Calculations:
+
+- Compare the available working time with the unrounded calculated pour duration in minutes.
+- `remaining time = available working time − pour duration`.
+- If remaining time is greater than or equal to `0`, the pour is expected to finish within the available time. If it is less than `0`, the pour is expected to exceed the available time by its absolute value.
+- Use the existing pour-duration calculation: `(truckloads − 1) × full-truck unload time + final-load unload time`. Use the partial unload time when the final load is partial. Do not compare against a rounded display value.
+- Pour duration begins when the first truck arrives and ends when the final load is empty. The checker does not include travel before the first arrival or return trips or washout after the pour.
+
+Outputs:
+
+- Show a clear status with remaining time when within the limit, or the amount by which the pour exceeds the limit. Equality counts as within the available time, with `0` minutes remaining.
+- Keep the existing pour-duration and finish-time outputs unchanged. The status is an estimate, not a guarantee of concrete performance.
+- Leave the result unevaluated and prompt for an available working time while the input is blank.
+- Update the result immediately when the available working time or any input that changes the calculated pour duration changes.
+
+Test cases:
+
+- For the `40 ft × 60 ft` validation example, pour duration is `94 min`. At `100 min`, show within time with `6 min` remaining; at `94 min`, show within time with `0 min` remaining; at `90 min`, show an overrun of `4 min`.
+- For the `20 ft × 20 ft × 4 in` validation example, pour duration is `10 min`. Verify it passes at `10 min` and exceeds the limit below `10 min`.
+- Verify that a partial final load uses its partial unload time in the pour-duration comparison.
+- Change available time, slab dimensions, thickness, waste, truck capacity, and placement rate; verify the status updates immediately.
+- Verify that blank input shows no pass/fail result and invalid values show an inline error without clearing otherwise-valid core results.
+- Verify that an invalid core pour input withholds the checker result rather than showing a result from stale or invalid duration data.
+- Verify that display rounding does not change the pass/fail result at the threshold.

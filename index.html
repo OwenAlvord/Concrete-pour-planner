@@ -259,6 +259,17 @@
       margin-top: 12px;
     }
 
+    .set-time-check-card {
+      min-height: 0;
+      margin-top: 12px;
+    }
+
+    .set-time-check-status {
+      margin: 8px 0 0;
+      color: var(--text);
+      font-weight: 650;
+    }
+
     .cost-summary-card .summary-value {
       font-size: clamp(1.35rem, 2vw, 1.8rem);
     }
@@ -554,6 +565,11 @@
               <span class="field-error" id="placement-error" aria-live="polite"></span>
             </div>
             <div class="input-field">
+              <label for="available-working-time">Available working time <span class="unit">(min)</span></label>
+              <input id="available-working-time" type="number" min="0" step="any" inputmode="decimal">
+              <span class="field-error" id="available-working-time-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
               <label for="washout">Washout &amp; reload <span class="unit">(min)</span></label>
               <input id="washout" type="number" value="10" min="0" step="any">
               <span class="field-error" id="washout-error" aria-live="polite"></span>
@@ -599,6 +615,10 @@
               <span class="summary-unit">local time</span>
             </article>
           </div>
+          <article class="summary-card set-time-check-card" aria-label="Concrete set-time check">
+            <span class="summary-label">Concrete set-time check</span>
+            <p class="set-time-check-status" id="set-time-check-status" role="status" aria-live="polite">Enter an available working time to check this pour.</p>
+          </article>
           <article class="summary-card cost-summary-card" aria-live="polite" aria-label="Concrete cost estimate">
             <span class="summary-label">Estimated concrete cost</span>
             <strong class="summary-value" id="cost-total-value">—</strong>
@@ -680,6 +700,7 @@
       const capacityInput = document.getElementById('capacity');
       const travelInput = document.getElementById('travel');
       const placementInput = document.getElementById('placement');
+      const availableWorkingTimeInput = document.getElementById('available-working-time');
       const washoutInput = document.getElementById('washout');
       const arrivalInput = document.getElementById('arrival');
       const pricePerCyInput = document.getElementById('price-per-cy');
@@ -952,6 +973,45 @@
         document.getElementById('cost-total-value').textContent = '—';
         document.getElementById('cost-breakdown').textContent = 'Enter valid slab and pour inputs to estimate cost.';
         currentCostCalculation = null;
+        updateSetTimeCheck(null);
+      }
+
+      function formatSetTimeMinutes(minutes) {
+        return minutes.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      }
+
+      function updateSetTimeCheck(pourDurationMinutes) {
+        const availableTime = validNumber(availableWorkingTimeInput);
+        const isBlank = availableWorkingTimeInput.value.trim() === '' &&
+          !availableWorkingTimeInput.validity.badInput;
+        const isValid = isBlank || (availableTime !== null && availableTime > 0);
+        const errorElement = document.getElementById('available-working-time-error');
+        const statusElement = document.getElementById('set-time-check-status');
+
+        setFieldError(availableWorkingTimeInput, errorElement, isValid,
+          'Enter a finite available working time greater than 0.');
+
+        if (!isValid) {
+          statusElement.textContent = 'Correct the available working time to check this pour.';
+          return;
+        }
+        if (isBlank) {
+          statusElement.textContent = 'Enter an available working time to check this pour.';
+          return;
+        }
+        if (pourDurationMinutes === null || !Number.isFinite(pourDurationMinutes)) {
+          statusElement.textContent = 'Checker unavailable until all required pour inputs are valid.';
+          return;
+        }
+
+        const remainingMinutes = availableTime - pourDurationMinutes;
+        if (remainingMinutes >= 0) {
+          statusElement.textContent =
+            `Expected to finish within the available time; ${formatSetTimeMinutes(remainingMinutes)} min remaining.`;
+        } else {
+          statusElement.textContent =
+            `Expected to exceed the available time by ${formatSetTimeMinutes(Math.abs(remainingMinutes))} min.`;
+        }
       }
 
       function formatCurrency(amount) {
@@ -1274,6 +1334,7 @@
         document.getElementById('rotation-value').textContent = String(trucksInRotation);
         document.getElementById('duration-value').textContent = formatDuration(pourDurationMinutes);
         document.getElementById('finish-value').textContent = formatClockTime(finishMinutes);
+        updateSetTimeCheck(pourDurationMinutes);
         currentCostCalculation = {
           orderedVolume,
           capacity,
@@ -1390,6 +1451,7 @@
         capacityInput,
         travelInput,
         placementInput,
+        availableWorkingTimeInput,
         washoutInput,
         arrivalInput
       ].forEach(input => {
