@@ -259,11 +259,15 @@
       padding-bottom: 4px;
     }
 
+    .timeline-canvas {
+      width: max-content;
+      --timeline-width: 720px;
+    }
+
     .timeline-axis,
     .timeline-row {
       display: grid;
-      grid-template-columns: 62px repeat(5, minmax(82px, 1fr));
-      min-width: 520px;
+      grid-template-columns: 116px var(--timeline-width);
       gap: 6px;
       align-items: center;
     }
@@ -272,15 +276,41 @@
       margin-bottom: 8px;
       color: var(--muted);
       font-size: 0.72rem;
+    }
+
+    .schedule-axis,
+    .schedule-track {
+      position: relative;
+      width: var(--timeline-width);
+    }
+
+    .schedule-axis {
+      height: 36px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .schedule-tick {
+      position: absolute;
+      bottom: 4px;
+      color: var(--muted);
+      white-space: nowrap;
+      transform: translateX(-50%);
       text-align: center;
     }
 
-    .timeline-axis .truck-label {
-      text-align: left;
+    .schedule-metrics,
+    .schedule-empty {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .schedule-empty {
+      padding: 8px 0;
     }
 
     .timeline-row {
-      min-height: 46px;
+      min-height: 42px;
       margin-bottom: 6px;
     }
 
@@ -290,10 +320,31 @@
       font-weight: 700;
     }
 
+    .schedule-track {
+      height: 34px;
+      border-left: 1px solid var(--border);
+      background: repeating-linear-gradient(
+        to right,
+        rgba(223, 230, 235, 0.75) 0,
+        rgba(223, 230, 235, 0.75) 1px,
+        transparent 1px,
+        transparent 80px
+      );
+    }
+
     .timeline-bar {
+      position: absolute;
+      top: 4px;
       height: 26px;
       border: 0;
       border-radius: 5px;
+      min-width: 2px;
+      cursor: help;
+    }
+
+    .timeline-bar:focus-visible {
+      outline: 3px solid #142b39;
+      outline-offset: 2px;
     }
 
     .travel {
@@ -517,54 +568,15 @@
       <section class="card" aria-labelledby="schedule-heading">
         <div class="card-body">
           <h2 class="card-title" id="schedule-heading">Truck schedule</h2>
-          <div class="timeline" aria-label="Mock truck schedule timeline">
-            <div class="timeline-axis" aria-hidden="true">
-              <span class="truck-label">Truck</span>
-              <span>7:00</span>
-              <span>7:20</span>
-              <span>7:40</span>
-              <span>8:00</span>
-              <span>8:20</span>
-            </div>
-            <div class="timeline-row">
-              <span class="truck-label">Load 1 · T1</span>
-              <span class="timeline-bar travel" aria-label="Travel out"></span>
-              <span class="timeline-bar unloading" aria-label="Unloading"></span>
-              <span class="timeline-bar return" aria-label="Trip back"></span>
-              <span class="timeline-bar washout" aria-label="Washout"></span>
-              <span></span>
-            </div>
-            <div class="timeline-row">
-              <span class="truck-label">Load 2 · T2</span>
-              <span></span>
-              <span class="timeline-bar travel" aria-label="Travel out"></span>
-              <span class="timeline-bar unloading" aria-label="Unloading"></span>
-              <span class="timeline-bar return" aria-label="Trip back"></span>
-              <span class="timeline-bar washout" aria-label="Washout"></span>
-            </div>
-            <div class="timeline-row">
-              <span class="truck-label">Load 3 · T3</span>
-              <span></span>
-              <span></span>
-              <span class="timeline-bar travel" aria-label="Travel out"></span>
-              <span class="timeline-bar unloading" aria-label="Unloading"></span>
-              <span class="timeline-bar return" aria-label="Trip back"></span>
-            </div>
-            <div class="timeline-row">
-              <span class="truck-label">Load 4 · T4</span>
-              <span></span>
-              <span></span>
-              <span></span>
-              <span class="timeline-bar travel" aria-label="Travel out"></span>
-              <span class="timeline-bar unloading" aria-label="Unloading"></span>
-            </div>
-            <div class="timeline-row">
-              <span class="truck-label">Load 5 · T1</span>
-              <span></span>
-              <span></span>
-              <span></span>
-              <span></span>
-              <span class="timeline-bar unloading" aria-label="Unloading partial load"></span>
+          <p class="schedule-metrics" id="schedule-metrics" aria-live="polite"></p>
+          <div class="timeline" id="truck-timeline" aria-label="Truck delivery schedule">
+            <p class="schedule-empty" id="schedule-empty">Schedule appears when all inputs are valid.</p>
+            <div class="timeline-canvas" id="timeline-canvas" hidden>
+              <div class="timeline-axis" aria-hidden="true">
+                <span class="truck-label">Load / truck</span>
+                <div class="schedule-axis" id="schedule-axis"></div>
+              </div>
+              <div id="timeline-rows"></div>
             </div>
           </div>
           <div class="legend" aria-label="Timeline legend">
@@ -923,6 +935,119 @@ Trucks in rotation: 4</p>
         return Number(match[1]) * 60 + Number(match[2]);
       }
 
+      function formatScheduleTime(totalMinutes) {
+        const dayOffset = Math.floor(totalMinutes / 1440);
+        const dayLabel = dayOffset === 0 ? '' :
+          dayOffset === 1 ? ' (+1 day)' :
+            dayOffset === -1 ? ' (previous day)' :
+              dayOffset > 1 ? ` (+${dayOffset} days)` : ` (${dayOffset} days)`;
+        return `${formatClockTime(totalMinutes)}${dayLabel}`;
+      }
+
+      function addScheduleSegment(track, type, start, end, axisStart, scale, label, loadNumber, truckNumber) {
+        if (end <= start) return;
+        const segment = document.createElement('span');
+        const startTime = arrivalInput.value ? parseArrivalTime() + start : start;
+        const endTime = arrivalInput.value ? parseArrivalTime() + end : end;
+        const detail = `${label}, load ${loadNumber}, truck ${truckNumber}: ${formatScheduleTime(startTime)} to ${formatScheduleTime(endTime)}`;
+        segment.className = `timeline-bar ${type}`;
+        segment.style.left = `${(start - axisStart) * scale}px`;
+        segment.style.width = `${(end - start) * scale}px`;
+        segment.tabIndex = 0;
+        segment.setAttribute('role', 'img');
+        segment.setAttribute('aria-label', detail);
+        segment.title = detail;
+        track.appendChild(segment);
+      }
+
+      function renderTruckSchedule({
+        truckloads,
+        capacity,
+        finalLoadSize,
+        placement,
+        travel,
+        washout,
+        fullUnloadMinutes,
+        roundTripMinutes,
+        trucksInRotation,
+        arrivalMinutes,
+        pourDurationMinutes
+      }) {
+        const canvas = document.getElementById('timeline-canvas');
+        const emptyMessage = document.getElementById('schedule-empty');
+        const metrics = document.getElementById('schedule-metrics');
+        const axis = document.getElementById('schedule-axis');
+        const rows = document.getElementById('timeline-rows');
+        const lastUnloadMinutes = finalLoadSize / placement * 60;
+        const totalScheduleMinutes = (truckloads - 1) * fullUnloadMinutes +
+          lastUnloadMinutes + travel + washout;
+        const axisStart = Math.floor((-travel) / 20) * 20;
+        const axisEnd = Math.ceil(totalScheduleMinutes / 20) * 20;
+        const duration = Math.max(20, axisEnd - axisStart);
+        const trackWidth = Math.max(720, duration * 4);
+        const scale = trackWidth / duration;
+
+        canvas.style.setProperty('--timeline-width', `${trackWidth}px`);
+        axis.replaceChildren();
+        rows.replaceChildren();
+
+        for (let tick = axisStart; tick <= axisEnd; tick += 20) {
+          const tickElement = document.createElement('span');
+          tickElement.className = 'schedule-tick';
+          tickElement.style.left = `${(tick - axisStart) * scale}px`;
+          tickElement.textContent = formatScheduleTime(arrivalMinutes + tick);
+          axis.appendChild(tickElement);
+        }
+
+        for (let index = 0; index < truckloads; index++) {
+          const loadNumber = index + 1;
+          const truckNumber = (index % trucksInRotation) + 1;
+          const loadSize = index === truckloads - 1 ? finalLoadSize : capacity;
+          const unloadMinutes = loadSize / placement * 60;
+          const arrivalOffset = index * fullUnloadMinutes;
+          const unloadEnd = arrivalOffset + unloadMinutes;
+          const returnEnd = unloadEnd + travel;
+          const washoutEnd = returnEnd + washout;
+          const row = document.createElement('div');
+          const label = document.createElement('span');
+          const track = document.createElement('div');
+
+          row.className = 'timeline-row';
+          row.setAttribute('role', 'group');
+          row.setAttribute('aria-label', `Load ${loadNumber}, assigned to truck ${truckNumber}`);
+          label.className = 'truck-label';
+          label.textContent = `Load ${loadNumber} · T${truckNumber} (${loadSize.toLocaleString('en-US', { maximumFractionDigits: 2 })} cy)`;
+          track.className = 'schedule-track';
+          row.append(label, track);
+
+          addScheduleSegment(track, 'travel', arrivalOffset - travel, arrivalOffset,
+            axisStart, scale, 'Travel out', loadNumber, truckNumber);
+          addScheduleSegment(track, 'unloading', arrivalOffset, unloadEnd,
+            axisStart, scale, 'Unloading', loadNumber, truckNumber);
+          addScheduleSegment(track, 'return', unloadEnd, returnEnd,
+            axisStart, scale, 'Trip back', loadNumber, truckNumber);
+          addScheduleSegment(track, 'washout', returnEnd, washoutEnd,
+            axisStart, scale, 'Washout and reload', loadNumber, truckNumber);
+          rows.appendChild(row);
+        }
+
+        canvas.hidden = false;
+        emptyMessage.hidden = true;
+        metrics.textContent = `Full-truck unloading: ${formatDuration(fullUnloadMinutes)} · ` +
+          `Truck round trip: ${formatDuration(roundTripMinutes)} · ` +
+          `Truck spacing: every ${formatDuration(fullUnloadMinutes)} · ` +
+          `Final load unload: ${formatDuration(lastUnloadMinutes)} · ` +
+          `Last load empty: ${formatScheduleTime(arrivalMinutes + pourDurationMinutes)}`;
+      }
+
+      function clearTruckSchedule() {
+        document.getElementById('timeline-canvas').hidden = true;
+        document.getElementById('schedule-empty').hidden = false;
+        document.getElementById('schedule-metrics').textContent = '';
+        document.getElementById('schedule-axis').replaceChildren();
+        document.getElementById('timeline-rows').replaceChildren();
+      }
+
       function updateMapAndCalculations() {
         let allValid = true;
 
@@ -965,6 +1090,7 @@ Trucks in rotation: 4</p>
         if (!allValid) {
           setMapLabel('');
           clearCalculatedSummary();
+          clearTruckSchedule();
           setHint('Correct the highlighted input.');
           return;
         }
@@ -972,7 +1098,7 @@ Trucks in rotation: 4</p>
         const withWaste = currentSlabArea * thickness / 12 / 27 * (1 + waste / 100);
         const orderedVolume = Math.ceil((withWaste - 1e-12) / 0.5) * 0.5;
         const truckloads = Math.ceil((orderedVolume - 1e-12) / capacity);
-        const finalLoadSize = orderedVolume - capacity * (truckloads - 1);
+        const finalLoadSize = Math.max(0, orderedVolume - capacity * (truckloads - 1));
 
         const fullUnloadMinutes = capacity / placement * 60;
         const partialUnloadMinutes = finalLoadSize / placement * 60;
@@ -980,7 +1106,7 @@ Trucks in rotation: 4</p>
         let trucksInRotation = Math.ceil(roundTripMinutes / fullUnloadMinutes);
         trucksInRotation = Math.max(1, Math.min(trucksInRotation, truckloads));
 
-        const finalUnloadMinutes = truckloads === 1 ? partialUnloadMinutes : (truckloads > 1 && finalLoadSize === capacity ? fullUnloadMinutes : partialUnloadMinutes);
+        const finalUnloadMinutes = Math.abs(finalLoadSize - capacity) < 1e-9 ? fullUnloadMinutes : partialUnloadMinutes;
         const pourDurationMinutes = (truckloads - 1) * fullUnloadMinutes + finalUnloadMinutes;
         const finishMinutes = arrivalMinutes + pourDurationMinutes;
 
@@ -989,6 +1115,19 @@ Trucks in rotation: 4</p>
         document.getElementById('rotation-value').textContent = String(trucksInRotation);
         document.getElementById('duration-value').textContent = formatDuration(pourDurationMinutes);
         document.getElementById('finish-value').textContent = formatClockTime(finishMinutes);
+        renderTruckSchedule({
+          truckloads,
+          capacity,
+          finalLoadSize,
+          placement,
+          travel,
+          washout,
+          fullUnloadMinutes,
+          roundTripMinutes,
+          trucksInRotation,
+          arrivalMinutes,
+          pourDurationMinutes
+        });
         setMapLabel(`${formatArea(currentSlabArea)} • ${orderedVolume.toFixed(1)} cy`);
         setHint('Drag a corner or enter dimensions.');
       }
