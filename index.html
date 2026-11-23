@@ -391,9 +391,18 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       background: #f8fafb;
-      white-space: pre-line;
+      white-space: pre-wrap;
       line-height: 1.55;
+      font: inherit;
       font-size: 0.85rem;
+      user-select: text;
+    }
+
+    .copy-status {
+      display: inline-block;
+      margin-left: 10px;
+      color: var(--muted);
+      font-size: 0.82rem;
     }
 
     .copy-button {
@@ -591,12 +600,9 @@
       <section class="card" aria-labelledby="order-heading">
         <div class="card-body">
           <h2 class="card-title" id="order-heading">Order summary</h2>
-          <p class="order-box">47.0 cy concrete
-5 loads: four 10-cy loads and one 7-cy load
-First truck: 7:00 AM
-Truck spacing: every 20 minutes
-Trucks in rotation: 4</p>
-          <button class="copy-button" type="button">Copy</button>
+          <pre class="order-box" id="order-box" aria-label="Plain-text batch plant order">Order details appear when all inputs are valid.</pre>
+          <button class="copy-button" id="copy-order-button" type="button" disabled>Copy</button>
+          <span class="copy-status" id="copy-status" role="status" aria-live="polite"></span>
         </div>
       </section>
     </div>
@@ -856,13 +862,18 @@ Trucks in rotation: 4</p>
 
       map.on('click', event => {
         if (!drawing) return;
+        const clickPoint = map.latLngToContainerPoint(event.latlng);
         if (draftLatLngs.length >= 3) {
           const first = draftMarkers[0].getLatLng();
-          const distance = event.latlng.distanceTo(first);
-          if (distance < 35) {
+          const firstPoint = map.latLngToContainerPoint(first);
+          if (clickPoint.distanceTo(firstPoint) < 8) {
             finishDrawing();
             return;
           }
+        }
+        if (draftLatLngs.length > 0) {
+          const previousPoint = map.latLngToContainerPoint(draftLatLngs[draftLatLngs.length - 1]);
+          if (clickPoint.distanceTo(previousPoint) < 2) return;
         }
         draftLatLngs.push(event.latlng);
         const marker = L.marker(event.latlng, {
@@ -897,6 +908,55 @@ Trucks in rotation: 4</p>
         document.getElementById('rotation-value').textContent = '—';
         document.getElementById('duration-value').textContent = '—';
         document.getElementById('finish-value').textContent = '—';
+        document.getElementById('order-box').textContent = 'Correct invalid inputs to generate the order.';
+        document.getElementById('copy-order-button').disabled = true;
+        document.getElementById('copy-status').textContent = '';
+      }
+
+      function updateOrderSummary({
+        orderedVolume,
+        truckloads,
+        capacity,
+        finalLoadSize,
+        trucksInRotation,
+        fullUnloadMinutes,
+        arrivalMinutes,
+        finishMinutes
+      }) {
+        const loads = [];
+        for (let index = 0; index < truckloads; index++) {
+          const loadSize = index === truckloads - 1 ? finalLoadSize : capacity;
+          const isPartial = loadSize < capacity - 1e-9;
+          const truckNumber = (index % trucksInRotation) + 1;
+          const size = `${loadSize.toLocaleString('en-US', { maximumFractionDigits: 2 })} cy`;
+          loads.push(`Load ${index + 1}: ${size}${isPartial ? ' (final partial load)' : ''} — Truck ${truckNumber}`);
+        }
+
+        document.getElementById('order-box').textContent = [
+          `${orderedVolume.toFixed(1)} cy concrete`,
+          `${truckloads} ${truckloads === 1 ? 'load' : 'loads'}:`,
+          ...loads,
+          `First truck arrival: ${formatScheduleTime(arrivalMinutes)}`,
+          `Truck spacing: every ${formatDuration(fullUnloadMinutes)}`,
+          `Trucks in rotation: ${trucksInRotation}`,
+          `Final load empty: ${formatScheduleTime(finishMinutes)}`
+        ].join('\n');
+        document.getElementById('copy-order-button').disabled = false;
+        document.getElementById('copy-status').textContent = '';
+      }
+
+      async function copyOrderSummary() {
+        const status = document.getElementById('copy-status');
+        const orderText = document.getElementById('order-box').textContent;
+        try {
+          if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+            throw new Error('Clipboard access is unavailable in this browser context.');
+          }
+          await navigator.clipboard.writeText(orderText);
+          status.textContent = 'Copied.';
+        } catch (error) {
+          status.textContent = 'Automatic copying was unsuccessful. Select and copy the order text.';
+        }
       }
 
       function setFieldError(input, errorElement, valid, message) {
@@ -1115,6 +1175,16 @@ Trucks in rotation: 4</p>
         document.getElementById('rotation-value').textContent = String(trucksInRotation);
         document.getElementById('duration-value').textContent = formatDuration(pourDurationMinutes);
         document.getElementById('finish-value').textContent = formatClockTime(finishMinutes);
+        updateOrderSummary({
+          orderedVolume,
+          truckloads,
+          capacity,
+          finalLoadSize,
+          trucksInRotation,
+          fullUnloadMinutes,
+          arrivalMinutes,
+          finishMinutes
+        });
         renderTruckSchedule({
           truckloads,
           capacity,
@@ -1158,7 +1228,11 @@ Trucks in rotation: 4</p>
 
       function drawTypedRectangle() {
         const dimensions = validateTypedDimensions();
-        if (!dimensions) return;
+        if (!dimensions) {
+          currentSlabArea = null;
+          updateMapAndCalculations();
+          return;
+        }
         clearDraft();
         clearCompleted();
         clearTyped();
@@ -1191,6 +1265,7 @@ Trucks in rotation: 4</p>
         clearDraft();
         clearCompleted();
         drawing = false;
+        currentSlabArea = null;
         drawButton.textContent = 'Draw slab';
         drawTypedRectangle();
       }
@@ -1215,6 +1290,7 @@ Trucks in rotation: 4</p>
       ].forEach(input => {
         input.addEventListener('input', updateMapAndCalculations);
       });
+      document.getElementById('copy-order-button').addEventListener('click', copyOrderSummary);
 
       showCompletedPolygon(EXAMPLE_CORNERS.map(([lat, lng]) => L.latLng(lat, lng)));
       map.fitBounds(completedPolygon.getBounds(), { padding: [40, 40] });
