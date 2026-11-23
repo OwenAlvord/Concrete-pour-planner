@@ -258,3 +258,36 @@ Build Stages
 5. **Final testing and polish**
    - Verify accessibility, responsive behavior, invalid-input handling, immediate updates, and map label output.
    - Test all specification examples, geographic area tolerance, changing every input, mobile layout, keyboard use, and final copy or timeline output.
+
+## Feature 1: Concrete Cost Estimator
+
+This approved estimator is an exception to the general “Costs” item under Out of scope; other cost modeling remains out of scope.
+
+Inputs:
+
+- Price per cubic yard. This is required to show an estimate; leave it blank by default rather than assuming a supplier price. It must be a finite decimal value greater than or equal to `0`.
+- Optional short-load fee. A blank value means no fee. It must be a finite decimal value greater than or equal to `0`.
+- Display cost amounts in USD (`$`).
+- Show inline validation for invalid cost inputs. An invalid cost input clears the cost estimate but does not clear otherwise valid quantity or truck-schedule results.
+
+Calculations:
+
+- Use the ordered volume after the existing calculation rounds it up to the next `0.5 cubic yards`.
+- `concrete cost = ordered volume × price per cubic yard`.
+- A short load is the final load when its size is less than the truck capacity. Add the optional fee once per order when the final load is short; do not add it when the final load equals truck capacity.
+- `estimated total = concrete cost + applicable short-load fee`.
+
+Outputs:
+
+- Display the estimated total and a breakdown of concrete cost and any applicable short-load fee.
+- Update the estimate immediately when either cost input changes or when another input changes ordered volume or final-load size.
+- Keep the cost estimate separate from the batch-plant order text.
+
+Test cases:
+
+- For the `40 ft × 60 ft` validation example, use the `47.0 cy` ordered volume, a `$150/cy` price, and a `$75` short-load fee. Concrete cost is `$7,050`; with the `7 cy` final partial load, estimated total is `$7,125`.
+- For the `20 ft × 20 ft × 4 in` validation example, use the `5.0 cy` order with the same price and fee. The final load is partial and the estimated total is `$825`.
+- For a `50 cy` order with `10 cy` truck capacity, use the same price and fee. The final load is full, so no fee applies and the total is `$7,500`.
+- With the `47.0 cy` order and the short-load fee blank, verify that the total is `$7,050`.
+- Change price, fee, slab dimensions, thickness, waste, and truck capacity; verify the estimate and breakdown update immediately, and that the fee is charged only once when the final load is partial.
+- Verify that blank or negative prices and negative fees show inline errors and clear only the cost estimate. Verify that a blank or zero fee is accepted as no fee.

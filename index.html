@@ -254,6 +254,24 @@
       font-size: 0.78rem;
     }
 
+    .cost-summary-card {
+      display: block;
+      margin-top: 12px;
+    }
+
+    .cost-summary-card .summary-value {
+      font-size: clamp(1.35rem, 2vw, 1.8rem);
+    }
+
+    .cost-breakdown {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
     .timeline {
       overflow-x: auto;
       padding-bottom: 4px;
@@ -516,6 +534,16 @@
               <span class="field-error" id="capacity-error" aria-live="polite"></span>
             </div>
             <div class="input-field">
+              <label for="price-per-cy">Concrete price <span class="unit">(USD/cy)</span></label>
+              <input id="price-per-cy" type="number" min="0" step="any" inputmode="decimal">
+              <span class="field-error" id="price-per-cy-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="short-load-fee">Short-load fee <span class="unit">(optional, USD)</span></label>
+              <input id="short-load-fee" type="number" min="0" step="any" inputmode="decimal">
+              <span class="field-error" id="short-load-fee-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
               <label for="travel">One-way travel <span class="unit">(min)</span></label>
               <input id="travel" type="number" value="20" min="0" step="any">
               <span class="field-error" id="travel-error" aria-live="polite"></span>
@@ -571,6 +599,13 @@
               <span class="summary-unit">local time</span>
             </article>
           </div>
+          <article class="summary-card cost-summary-card" aria-live="polite" aria-label="Concrete cost estimate">
+            <span class="summary-label">Estimated concrete cost</span>
+            <strong class="summary-value" id="cost-total-value">—</strong>
+            <div class="cost-breakdown" id="cost-breakdown">
+              <span>Enter a price per cubic yard to see an estimate.</span>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -647,6 +682,8 @@
       const placementInput = document.getElementById('placement');
       const washoutInput = document.getElementById('washout');
       const arrivalInput = document.getElementById('arrival');
+      const pricePerCyInput = document.getElementById('price-per-cy');
+      const shortLoadFeeInput = document.getElementById('short-load-fee');
 
       let mode = 'draw';
       let drawing = false;
@@ -657,6 +694,7 @@
       let completedMarkers = [];
       let typedPolygon = null;
       let currentSlabArea = null;
+      let currentCostCalculation = null;
 
       function setHint(text) {
         hint.textContent = text;
@@ -911,6 +949,67 @@
         document.getElementById('order-box').textContent = 'Correct invalid inputs to generate the order.';
         document.getElementById('copy-order-button').disabled = true;
         document.getElementById('copy-status').textContent = '';
+        document.getElementById('cost-total-value').textContent = '—';
+        document.getElementById('cost-breakdown').textContent = 'Enter valid slab and pour inputs to estimate cost.';
+        currentCostCalculation = null;
+      }
+
+      function formatCurrency(amount) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2
+        }).format(amount);
+      }
+
+      function updateCostEstimate(calculation) {
+        const pricePerCy = validNumber(pricePerCyInput);
+        const feeValue = shortLoadFeeInput.value.trim() === '' ? 0 : validNumber(shortLoadFeeInput);
+        const priceValid = pricePerCy !== null && pricePerCy >= 0;
+        const feeValid = feeValue !== null && feeValue >= 0;
+        const priceError = document.getElementById('price-per-cy-error');
+        const feeError = document.getElementById('short-load-fee-error');
+
+        setFieldError(pricePerCyInput, priceError, priceValid,
+          'Enter a finite price per cubic yard of 0 or more.');
+        setFieldError(shortLoadFeeInput, feeError, feeValid,
+          'Enter a finite fee of 0 or more, or leave it blank.');
+
+        const totalElement = document.getElementById('cost-total-value');
+        const breakdown = document.getElementById('cost-breakdown');
+        if (!priceValid || !feeValid || !calculation) {
+          totalElement.textContent = '—';
+          if (!priceValid) {
+            breakdown.textContent = 'Enter a valid price per cubic yard to see an estimate.';
+          } else if (!feeValid) {
+            breakdown.textContent = 'Correct the short-load fee to see an estimate.';
+          } else {
+            breakdown.textContent = 'Enter valid slab and pour inputs to estimate cost.';
+          }
+          return;
+        }
+
+        const concreteCost = calculation.orderedVolume * pricePerCy;
+        const isShortLoad = calculation.finalLoadSize <
+          calculation.capacity - Math.max(Math.abs(calculation.capacity), Math.abs(calculation.finalLoadSize)) * Number.EPSILON * 4;
+        const applicableFee = isShortLoad ? feeValue : 0;
+        const total = concreteCost + applicableFee;
+        if (!Number.isFinite(concreteCost) || !Number.isFinite(total)) {
+          totalElement.textContent = '—';
+          breakdown.textContent = 'This estimate exceeds the supported numeric range.';
+          return;
+        }
+
+        totalElement.textContent = formatCurrency(total);
+        breakdown.replaceChildren();
+        const concreteLine = document.createElement('span');
+        concreteLine.textContent = `Concrete (${calculation.orderedVolume.toFixed(1)} cy × ${formatCurrency(pricePerCy)}/cy): ${formatCurrency(concreteCost)}`;
+        const feeLine = document.createElement('span');
+        feeLine.textContent = isShortLoad
+          ? `Short-load fee (${calculation.finalLoadSize.toLocaleString('en-US', { maximumFractionDigits: 2 })} cy final load): ${formatCurrency(applicableFee)}`
+          : `Short-load fee: ${formatCurrency(0)} (final load is full)`;
+        breakdown.append(concreteLine, feeLine);
       }
 
       function updateOrderSummary({
@@ -1175,6 +1274,12 @@
         document.getElementById('rotation-value').textContent = String(trucksInRotation);
         document.getElementById('duration-value').textContent = formatDuration(pourDurationMinutes);
         document.getElementById('finish-value').textContent = formatClockTime(finishMinutes);
+        currentCostCalculation = {
+          orderedVolume,
+          capacity,
+          finalLoadSize
+        };
+        updateCostEstimate(currentCostCalculation);
         updateOrderSummary({
           orderedVolume,
           truckloads,
@@ -1289,6 +1394,9 @@
         arrivalInput
       ].forEach(input => {
         input.addEventListener('input', updateMapAndCalculations);
+      });
+      [pricePerCyInput, shortLoadFeeInput].forEach(input => {
+        input.addEventListener('input', () => updateCostEstimate(currentCostCalculation));
       });
       document.getElementById('copy-order-button').addEventListener('click', copyOrderSummary);
 
