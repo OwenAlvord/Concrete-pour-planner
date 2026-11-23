@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concrete Pour Planner</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      --accent: #1877a7;
+      --accent-dark: #115b7d;
+      --background: #f3f6f8;
+      --card: #ffffff;
+      --border: #dfe6eb;
+      --text: #1d2a33;
+      --muted: #657681;
+      --travel: #4a90a4;
+      --unloading: #e39a38;
+      --return: #7c9db5;
+      --washout: #8a7eb8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--background);
+    }
+
+    .app-header {
+      padding: 22px 32px 18px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .app-header h1 {
+      margin: 0;
+      font-size: 1.55rem;
+      letter-spacing: -0.02em;
+    }
+
+    .app-header p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(310px, 0.82fr) minmax(420px, 1.18fr);
+      gap: 20px;
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 20px 32px 32px;
+    }
+
+    .left-column,
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-width: 0;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(223, 230, 235, 0.78);
+      border-radius: 12px;
+      box-shadow: 0 5px 18px rgba(34, 54, 66, 0.07);
+    }
+
+    .card-body {
+      padding: 18px;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 0 14px;
+      font-size: 1rem;
+    }
+
+    .hint {
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      color: var(--accent-dark);
+      background: #edf6fa;
+      font-size: 0.88rem;
+    }
+
+    #slab-map {
+      position: relative;
+      width: 100%;
+      min-height: 330px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #b9c3a9;
+    }
+
+    .map-label {
+      position: absolute;
+      z-index: 500;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      min-width: 150px;
+      padding: 7px 9px;
+      border-radius: 6px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 2px 8px rgba(34, 54, 66, 0.18);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .draw-button {
+      min-height: 38px;
+      padding: 8px 12px;
+      border: 1px solid var(--accent);
+      border-radius: 7px;
+      color: var(--accent);
+      background: #ffffff;
+      font: inherit;
+      font-weight: 700;
+    }
+
+    .draw-button:focus-visible,
+    input:focus-visible,
+    .copy-button:focus-visible {
+      outline: 3px solid rgba(24, 119, 167, 0.28);
+      outline-offset: 2px;
+    }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .mode-tabs button {
+      border: 0;
+      padding: 9px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      text-align: center;
+      color: var(--muted);
+      background: #f8fafb;
+      font-size: 0.86rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .mode-tabs .active {
+      border-color: var(--accent);
+      color: var(--accent-dark);
+      background: #edf6fa;
+    }
+
+    .input-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .input-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .input-field label {
+      color: #42545f;
+      font-size: 0.79rem;
+      font-weight: 700;
+    }
+
+    .input-field input {
+      width: 100%;
+      height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 10px;
+      color: var(--text);
+      background: #ffffff;
+      font: inherit;
+    }
+
+    .unit {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .summary-card {
+      min-height: 112px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--accent);
+      border-radius: 9px;
+      background: #ffffff;
+    }
+
+    .input-field input[aria-invalid="true"] {
+      border-color: #b42318;
+      background: #fff8f7;
+    }
+
+    .field-error {
+      min-height: 1em;
+      color: #b42318;
+      font-size: 0.76rem;
+      font-weight: 700;
+    }
+
+    .summary-label {
+      display: block;
+      min-height: 34px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1.25;
+      text-transform: uppercase;
+    }
+
+    .summary-value {
+      display: block;
+      margin-top: 8px;
+      font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .summary-unit {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .timeline {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .timeline-axis,
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 62px repeat(5, minmax(82px, 1fr));
+      min-width: 520px;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .timeline-axis {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-align: center;
+    }
+
+    .timeline-axis .truck-label {
+      text-align: left;
+    }
+
+    .timeline-row {
+      min-height: 46px;
+      margin-bottom: 6px;
+    }
+
+    .truck-label {
+      color: #42545f;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .timeline-bar {
+      height: 26px;
+      border: 0;
+      border-radius: 5px;
+    }
+
+    .travel {
+      background: var(--travel);
+    }
+
+    .unloading {
+      background: var(--unloading);
+    }
+
+    .return {
+      background: var(--return);
+    }
+
+    .washout {
+      background: var(--washout);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .order-box {
+      min-height: 110px;
+      margin: 0 0 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f8fafb;
+      white-space: pre-line;
+      line-height: 1.55;
+      font-size: 0.85rem;
+    }
+
+    .copy-button {
+      min-height: 38px;
+      padding: 8px 14px;
+      border: 0;
+      border-radius: 7px;
+      color: #ffffff;
+      background: var(--accent);
+      font: inherit;
+      font-weight: 700;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 600px) {
+      .app-header {
+        padding: 18px 16px;
+      }
+
+      .layout {
+        gap: 14px;
+        padding: 14px 12px 24px;
+      }
+
+      .left-column,
+      .right-column {
+        gap: 14px;
+      }
+
+      #slab-map {
+        min-height: 270px;
+      }
+
+      .input-grid,
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-card {
+        min-height: 96px;
+      }
+
+      .summary-label {
+        min-height: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Concrete Pour Planner</h1>
+    <p>Plan slab volume, truck rotations, and arrival timing</p>
+  </header>
+
+  <main class="layout">
+    <div class="left-column">
+      <section class="card" aria-labelledby="slab-map-heading">
+        <div class="card-body">
+          <h2 class="card-title" id="slab-map-heading">
+            <span>Slab outline</span>
+            <button class="draw-button" id="draw-slab-button" type="button">Draw slab</button>
+          </h2>
+          <p class="hint" id="map-hint">Choose Draw slab and click at least three corners.</p>
+          <div id="slab-map" role="application" aria-label="Interactive satellite map for drawing the slab outline">
+            <span class="map-label" id="map-label" aria-live="polite">Loading slab area…</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="inputs-heading">
+        <div class="card-body">
+          <h2 class="card-title" id="inputs-heading">Pour inputs</h2>
+          <div class="mode-tabs" aria-label="Slab input method">
+            <button class="active" id="draw-mode-button" type="button">Drawn outline</button>
+            <button id="typed-mode-button" type="button">Typed dimensions</button>
+          </div>
+
+          <div class="input-grid">
+            <div class="input-field">
+              <label for="length">Length <span class="unit">(ft)</span></label>
+              <input id="length" type="number" value="40" min="0" step="any">
+              <span class="field-error" id="length-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="width">Width <span class="unit">(ft)</span></label>
+              <input id="width" type="number" value="60" min="0" step="any">
+              <span class="field-error" id="width-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="thickness">Slab thickness <span class="unit">(in)</span></label>
+              <input id="thickness" type="number" value="6" min="0" step="any">
+              <span class="field-error" id="thickness-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="waste">Waste allowance <span class="unit">(%)</span></label>
+              <input id="waste" type="number" value="5" min="0" step="any">
+              <span class="field-error" id="waste-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="capacity">Truck capacity <span class="unit">(cy)</span></label>
+              <input id="capacity" type="number" value="10" min="0" step="any">
+              <span class="field-error" id="capacity-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="travel">One-way travel <span class="unit">(min)</span></label>
+              <input id="travel" type="number" value="20" min="0" step="any">
+              <span class="field-error" id="travel-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="placement">Placement rate <span class="unit">(cy/hr)</span></label>
+              <input id="placement" type="number" value="30" min="0" step="any">
+              <span class="field-error" id="placement-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="washout">Washout &amp; reload <span class="unit">(min)</span></label>
+              <input id="washout" type="number" value="10" min="0" step="any">
+              <span class="field-error" id="washout-error" aria-live="polite"></span>
+            </div>
+            <div class="input-field">
+              <label for="arrival">First truck arrival</label>
+              <input id="arrival" type="time" value="07:00">
+              <span class="field-error" id="arrival-error" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="right-column">
+      <section class="card" aria-labelledby="summary-heading">
+        <div class="card-body">
+          <h2 class="card-title" id="summary-heading">Pour summary</h2>
+          <div class="summary-grid">
+            <article class="summary-card">
+              <span class="summary-label">Concrete to order</span>
+              <strong class="summary-value" id="order-volume-value">47.0</strong>
+              <span class="summary-unit">cubic yards</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Truckloads</span>
+              <strong class="summary-value" id="truckloads-value">5</strong>
+              <span class="summary-unit">loads</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Trucks in rotation</span>
+              <strong class="summary-value" id="rotation-value">4</strong>
+              <span class="summary-unit">trucks</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Pour duration</span>
+              <strong class="summary-value" id="duration-value">1h 34m</strong>
+              <span class="summary-unit">estimated</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Finish time</span>
+              <strong class="summary-value" id="finish-value">8:34 AM</strong>
+              <span class="summary-unit">local time</span>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="schedule-heading">
+        <div class="card-body">
+          <h2 class="card-title" id="schedule-heading">Truck schedule</h2>
+          <div class="timeline" aria-label="Mock truck schedule timeline">
+            <div class="timeline-axis" aria-hidden="true">
+              <span class="truck-label">Truck</span>
+              <span>7:00</span>
+              <span>7:20</span>
+              <span>7:40</span>
+              <span>8:00</span>
+              <span>8:20</span>
+            </div>
+            <div class="timeline-row">
+              <span class="truck-label">Load 1 · T1</span>
+              <span class="timeline-bar travel" aria-label="Travel out"></span>
+              <span class="timeline-bar unloading" aria-label="Unloading"></span>
+              <span class="timeline-bar return" aria-label="Trip back"></span>
+              <span class="timeline-bar washout" aria-label="Washout"></span>
+              <span></span>
+            </div>
+            <div class="timeline-row">
+              <span class="truck-label">Load 2 · T2</span>
+              <span></span>
+              <span class="timeline-bar travel" aria-label="Travel out"></span>
+              <span class="timeline-bar unloading" aria-label="Unloading"></span>
+              <span class="timeline-bar return" aria-label="Trip back"></span>
+              <span class="timeline-bar washout" aria-label="Washout"></span>
+            </div>
+            <div class="timeline-row">
+              <span class="truck-label">Load 3 · T3</span>
+              <span></span>
+              <span></span>
+              <span class="timeline-bar travel" aria-label="Travel out"></span>
+              <span class="timeline-bar unloading" aria-label="Unloading"></span>
+              <span class="timeline-bar return" aria-label="Trip back"></span>
+            </div>
+            <div class="timeline-row">
+              <span class="truck-label">Load 4 · T4</span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span class="timeline-bar travel" aria-label="Travel out"></span>
+              <span class="timeline-bar unloading" aria-label="Unloading"></span>
+            </div>
+            <div class="timeline-row">
+              <span class="truck-label">Load 5 · T1</span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span class="timeline-bar unloading" aria-label="Unloading partial load"></span>
+            </div>
+          </div>
+          <div class="legend" aria-label="Timeline legend">
+            <span class="legend-item"><span class="legend-swatch travel"></span>Travel out</span>
+            <span class="legend-item"><span class="legend-swatch unloading"></span>Unloading</span>
+            <span class="legend-item"><span class="legend-swatch return"></span>Trip back</span>
+            <span class="legend-item"><span class="legend-swatch washout"></span>Washout</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="order-heading">
+        <div class="card-body">
+          <h2 class="card-title" id="order-heading">Order summary</h2>
+          <p class="order-box">47.0 cy concrete
+5 loads: four 10-cy loads and one 7-cy load
+First truck: 7:00 AM
+Truck spacing: every 20 minutes
+Trucks in rotation: 4</p>
+          <button class="copy-button" type="button">Copy</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    (() => {
+      const BYU_CENTER = [40.2508, -111.6493];
+      const EXAMPLE_CORNERS = [
+        [40.2500, -111.6500],
+        [40.2510, -111.6500],
+        [40.2510, -111.6490],
+        [40.2500, -111.6490]
+      ];
+
+      const map = L.map('slab-map', {
+        center: BYU_CENTER,
+        zoom: 15,
+        minZoom: 12,
+        maxZoom: 20
+      });
+
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 20,
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+      }).addTo(map);
+
+      const drawButton = document.getElementById('draw-slab-button');
+      const drawModeButton = document.getElementById('draw-mode-button');
+      const typedModeButton = document.getElementById('typed-mode-button');
+      const hint = document.getElementById('map-hint');
+      const mapLabel = document.getElementById('map-label');
+      const lengthInput = document.getElementById('length');
+      const widthInput = document.getElementById('width');
+      const lengthError = document.getElementById('length-error');
+      const widthError = document.getElementById('width-error');
+      const thicknessInput = document.getElementById('thickness');
+      const wasteInput = document.getElementById('waste');
+      const capacityInput = document.getElementById('capacity');
+      const travelInput = document.getElementById('travel');
+      const placementInput = document.getElementById('placement');
+      const washoutInput = document.getElementById('washout');
+      const arrivalInput = document.getElementById('arrival');
+
+      let mode = 'draw';
+      let drawing = false;
+      let draftLatLngs = [];
+      let draftPolygon = null;
+      let draftMarkers = [];
+      let completedPolygon = null;
+      let completedMarkers = [];
+      let typedPolygon = null;
+      let currentSlabArea = null;
+
+      function setHint(text) {
+        hint.textContent = text;
+      }
+
+      function setModeActive(nextMode) {
+        mode = nextMode;
+        drawModeButton.classList.toggle('active', nextMode === 'draw');
+        typedModeButton.classList.toggle('active', nextMode === 'typed');
+      }
+
+      function clearDraft() {
+        if (draftPolygon) {
+          map.removeLayer(draftPolygon);
+        }
+        draftMarkers.forEach(marker => map.removeLayer(marker));
+        draftPolygon = null;
+        draftMarkers = [];
+        draftLatLngs = [];
+        drawing = false;
+      }
+
+      function clearCompleted() {
+        if (completedPolygon) {
+          map.removeLayer(completedPolygon);
+        }
+        completedMarkers.forEach(marker => map.removeLayer(marker));
+        completedPolygon = null;
+        completedMarkers = [];
+      }
+
+      function clearTyped() {
+        if (typedPolygon) {
+          map.removeLayer(typedPolygon);
+        }
+        typedPolygon = null;
+      }
+
+      function formatArea(area) {
+        return `${Math.round(area).toLocaleString('en-US')} ft\u00B2`;
+      }
+
+      function geographicArea(latLngs) {
+        if (latLngs.length < 3) return 0;
+        const R = 6378137;
+        let sum = 0;
+        for (let i = 0; i < latLngs.length; i++) {
+          const current = latLngs[i];
+          const next = latLngs[(i + 1) % latLngs.length];
+          const lon1 = current.lng * Math.PI / 180;
+          const lon2 = next.lng * Math.PI / 180;
+          const lat1 = current.lat * Math.PI / 180;
+          const lat2 = next.lat * Math.PI / 180;
+          sum += (lon2 - lon1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+        }
+        return (R * R * Math.abs(sum) / 2) * 10.7639;
+      }
+
+      function setMapLabel(text) {
+        mapLabel.textContent = text;
+        mapLabel.hidden = !text;
+      }
+
+      function segmentsIntersect(a, b, c, d) {
+        function cross(p, q, r) {
+          return (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+        }
+        function onSegment(p, q, r) {
+          return q.x <= Math.max(p.x, r.x) + 1e-12 &&
+            q.x >= Math.min(p.x, r.x) - 1e-12 &&
+            q.y <= Math.max(p.y, r.y) + 1e-12 &&
+            q.y >= Math.min(p.y, r.y) - 1e-12;
+        }
+        const abC = cross(a, b, c);
+        const abD = cross(a, b, d);
+        const cdA = cross(c, d, a);
+        const cdB = cross(c, d, b);
+        if (((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) &&
+            ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))) return true;
+        if (Math.abs(abC) < 1e-12 && onSegment(a, c, b)) return true;
+        if (Math.abs(abD) < 1e-12 && onSegment(a, d, b)) return true;
+        if (Math.abs(cdA) < 1e-12 && onSegment(c, a, d)) return true;
+        if (Math.abs(cdB) < 1e-12 && onSegment(c, b, d)) return true;
+        return false;
+      }
+
+      function hasSelfIntersection(latLngs) {
+        const points = latLngs.map(point => ({ x: point.lng, y: point.lat }));
+        const count = points.length;
+        if (count < 4) return false;
+        for (let i = 0; i < count; i++) {
+          const a = points[i];
+          const b = points[(i + 1) % count];
+          for (let j = i + 1; j < count; j++) {
+            if (j === i || (i === 0 && j === count - 1)) continue;
+            const c = points[j];
+            const d = points[(j + 1) % count];
+            if (b === c || d === a) continue;
+            if (segmentsIntersect(a, b, c, d)) return true;
+          }
+        }
+        return false;
+      }
+
+      function updatePolygonAndLabel() {
+        const latLngs = completedPolygon ? completedPolygon.getLatLngs()[0] : [];
+        if (latLngs.length >= 3) {
+          currentSlabArea = geographicArea(latLngs);
+          updateMapAndCalculations();
+        }
+      }
+
+      function showCompletedPolygon(latLngs) {
+        clearDraft();
+        clearCompleted();
+        drawing = false;
+        completedPolygon = L.polygon(latLngs, {
+          color: '#1877a7',
+          weight: 3,
+          fillColor: '#f8c64b',
+          fillOpacity: 0.28
+        }).addTo(map);
+
+        completedMarkers = latLngs.map((latLng, index) => {
+          const marker = L.marker(latLng, { draggable: true, title: `Slab corner ${index + 1}`, keyboard: true }).addTo(map);
+          let dragStartLatLng = latLng;
+          marker.on('dragstart', () => {
+            dragStartLatLng = marker.getLatLng();
+          });
+          marker.on('drag', () => {
+            const latLngsNow = completedPolygon.getLatLngs()[0];
+            latLngsNow[index] = marker.getLatLng();
+            completedPolygon.setLatLngs(latLngsNow);
+            currentSlabArea = geographicArea(latLngsNow);
+            updateMapAndCalculations();
+          });
+          marker.on('dragend', () => {
+            const latLngsNow = completedPolygon.getLatLngs()[0];
+            if (latLngsNow.length < 3 || hasSelfIntersection(latLngsNow)) {
+              marker.setLatLng(dragStartLatLng);
+              latLngsNow[index] = dragStartLatLng;
+              completedPolygon.setLatLngs(latLngsNow);
+              setHint('That move would make the outline self-intersecting. The corner was restored.');
+            } else {
+              setHint('Drag a corner or enter dimensions.');
+            }
+            currentSlabArea = geographicArea(latLngsNow);
+            updateMapAndCalculations();
+          });
+          return marker;
+        });
+        updatePolygonAndLabel();
+      }
+
+      function startDrawing() {
+        clearDraft();
+        clearTyped();
+        setModeActive('draw');
+        drawing = true;
+        currentSlabArea = null;
+        drawButton.textContent = 'Cancel drawing';
+        setHint('Click at least three corners, then double-click or click the first point to finish.');
+        setMapLabel('');
+        clearCalculatedSummary();
+      }
+
+      function finishDrawing() {
+        if (draftLatLngs.length < 3) {
+          setHint('Choose at least three corners before finishing the slab.');
+          setMapLabel('');
+          return;
+        }
+        if (hasSelfIntersection(draftLatLngs)) {
+          setHint('The outline is self-intersecting. Move or remove the last corner and try again.');
+          setMapLabel('');
+          return;
+        }
+        showCompletedPolygon(draftLatLngs.slice());
+        drawButton.textContent = 'Draw slab';
+        setHint('Drag a corner or enter dimensions.');
+      }
+
+      function cancelDrawing() {
+        clearDraft();
+        drawButton.textContent = 'Draw slab';
+        setHint('Choose Draw slab and click at least three corners.');
+        if (completedPolygon) {
+          const latLngs = completedPolygon.getLatLngs()[0];
+          currentSlabArea = geographicArea(latLngs);
+          updateMapAndCalculations();
+        } else {
+          currentSlabArea = null;
+          setMapLabel('');
+          clearCalculatedSummary();
+        }
+      }
+
+      drawButton.addEventListener('click', () => {
+        if (drawing) cancelDrawing();
+        else startDrawing();
+      });
+      drawModeButton.addEventListener('click', startDrawing);
+
+      map.on('click', event => {
+        if (!drawing) return;
+        if (draftLatLngs.length >= 3) {
+          const first = draftMarkers[0].getLatLng();
+          const distance = event.latlng.distanceTo(first);
+          if (distance < 35) {
+            finishDrawing();
+            return;
+          }
+        }
+        draftLatLngs.push(event.latlng);
+        const marker = L.marker(event.latlng, {
+          draggable: false,
+          title: `Draft corner ${draftLatLngs.length}`,
+          keyboard: true
+        }).addTo(map);
+        draftMarkers.push(marker);
+        if (draftLatLngs.length === 1) {
+          marker.on('click', () => {
+            if (drawing) finishDrawing();
+          });
+        }
+        if (draftPolygon) map.removeLayer(draftPolygon);
+        draftPolygon = L.polygon(draftLatLngs, {
+          color: '#1877a7',
+          weight: 3,
+          fillColor: '#f8c64b',
+          fillOpacity: 0.28
+        }).addTo(map);
+      });
+
+      map.on('dblclick', event => {
+        if (!drawing) return;
+        L.DomEvent.stop(event.originalEvent);
+        finishDrawing();
+      });
+
+      function clearCalculatedSummary() {
+        document.getElementById('order-volume-value').textContent = '—';
+        document.getElementById('truckloads-value').textContent = '—';
+        document.getElementById('rotation-value').textContent = '—';
+        document.getElementById('duration-value').textContent = '—';
+        document.getElementById('finish-value').textContent = '—';
+      }
+
+      function setFieldError(input, errorElement, valid, message) {
+        input.setAttribute('aria-invalid', valid ? 'false' : 'true');
+        errorElement.textContent = valid ? '' : message;
+        return valid;
+      }
+
+      function validNumber(input) {
+        if (input.value.trim() === '') return null;
+        const number = Number(input.value);
+        return Number.isFinite(number) ? number : null;
+      }
+
+      function formatDuration(totalMinutes) {
+        const roundedMinutes = Math.max(0, Math.round(totalMinutes));
+        if (roundedMinutes < 60) return `${roundedMinutes} min`;
+        const hours = Math.floor(roundedMinutes / 60);
+        const minutes = roundedMinutes % 60;
+        return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+      }
+
+      function formatClockTime(totalMinutes) {
+        const wrapped = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+        const hours = Math.floor(wrapped / 60);
+        const minutes = wrapped % 60;
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`;
+      }
+
+      function parseArrivalTime() {
+        if (!arrivalInput.value) return null;
+        const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(arrivalInput.value);
+        if (!match) return null;
+        return Number(match[1]) * 60 + Number(match[2]);
+      }
+
+      function updateMapAndCalculations() {
+        let allValid = true;
+
+        if (mode === 'typed') {
+          allValid = validateTypedDimensions() !== null && allValid;
+        } else {
+          lengthInput.setAttribute('aria-invalid', 'false');
+          widthInput.setAttribute('aria-invalid', 'false');
+          lengthError.textContent = '';
+          widthError.textContent = '';
+        }
+
+        if (drawing || currentSlabArea === null || !Number.isFinite(currentSlabArea) || currentSlabArea <= 0) {
+          allValid = false;
+        }
+
+        const thickness = validNumber(thicknessInput);
+        const waste = validNumber(wasteInput);
+        const capacity = validNumber(capacityInput);
+        const travel = validNumber(travelInput);
+        const placement = validNumber(placementInput);
+        const washout = validNumber(washoutInput);
+        const arrivalMinutes = parseArrivalTime();
+
+        allValid = setFieldError(thicknessInput, document.getElementById('thickness-error'),
+          thickness !== null && thickness > 0, 'Enter a finite thickness greater than 0.') && allValid;
+        allValid = setFieldError(wasteInput, document.getElementById('waste-error'),
+          waste !== null && waste >= 0, 'Enter a finite waste percentage of 0 or more.') && allValid;
+        allValid = setFieldError(capacityInput, document.getElementById('capacity-error'),
+          capacity !== null && capacity > 0, 'Enter a finite truck capacity greater than 0.') && allValid;
+        allValid = setFieldError(travelInput, document.getElementById('travel-error'),
+          travel !== null && travel > 0, 'Enter a finite travel time greater than 0.') && allValid;
+        allValid = setFieldError(placementInput, document.getElementById('placement-error'),
+          placement !== null && placement > 0, 'Enter a finite placement rate greater than 0.') && allValid;
+        allValid = setFieldError(washoutInput, document.getElementById('washout-error'),
+          washout !== null && washout >= 0, 'Enter a finite washout time of 0 or more.') && allValid;
+        allValid = setFieldError(arrivalInput, document.getElementById('arrival-error'),
+          arrivalMinutes !== null, 'Enter a valid first-truck arrival time.') && allValid;
+
+        if (!allValid) {
+          setMapLabel('');
+          clearCalculatedSummary();
+          setHint('Correct the highlighted input.');
+          return;
+        }
+
+        const withWaste = currentSlabArea * thickness / 12 / 27 * (1 + waste / 100);
+        const orderedVolume = Math.ceil((withWaste - 1e-12) / 0.5) * 0.5;
+        const truckloads = Math.ceil((orderedVolume - 1e-12) / capacity);
+        const finalLoadSize = orderedVolume - capacity * (truckloads - 1);
+
+        const fullUnloadMinutes = capacity / placement * 60;
+        const partialUnloadMinutes = finalLoadSize / placement * 60;
+        const roundTripMinutes = 2 * travel + fullUnloadMinutes + washout;
+        let trucksInRotation = Math.ceil(roundTripMinutes / fullUnloadMinutes);
+        trucksInRotation = Math.max(1, Math.min(trucksInRotation, truckloads));
+
+        const finalUnloadMinutes = truckloads === 1 ? partialUnloadMinutes : (truckloads > 1 && finalLoadSize === capacity ? fullUnloadMinutes : partialUnloadMinutes);
+        const pourDurationMinutes = (truckloads - 1) * fullUnloadMinutes + finalUnloadMinutes;
+        const finishMinutes = arrivalMinutes + pourDurationMinutes;
+
+        document.getElementById('order-volume-value').textContent = orderedVolume.toFixed(1);
+        document.getElementById('truckloads-value').textContent = String(truckloads);
+        document.getElementById('rotation-value').textContent = String(trucksInRotation);
+        document.getElementById('duration-value').textContent = formatDuration(pourDurationMinutes);
+        document.getElementById('finish-value').textContent = formatClockTime(finishMinutes);
+        setMapLabel(`${formatArea(currentSlabArea)} • ${orderedVolume.toFixed(1)} cy`);
+        setHint('Drag a corner or enter dimensions.');
+      }
+
+      function validPositive(input) {
+        if (input.value.trim() === '') return null;
+        const number = Number(input.value);
+        return Number.isFinite(number) && number > 0 ? number : null;
+      }
+
+      function validateTypedDimensions() {
+        const length = validPositive(lengthInput);
+        const width = validPositive(widthInput);
+        lengthError.textContent = length === null ? 'Enter a finite length greater than 0.' : '';
+        widthError.textContent = width === null ? 'Enter a finite width greater than 0.' : '';
+        lengthInput.setAttribute('aria-invalid', length === null ? 'true' : 'false');
+        widthInput.setAttribute('aria-invalid', width === null ? 'true' : 'false');
+        if (length === null || width === null) {
+          clearTyped();
+          setMapLabel('');
+          setHint('Correct the highlighted input.');
+          return null;
+        }
+        lengthError.textContent = '';
+        widthError.textContent = '';
+        return { length, width };
+      }
+
+      function drawTypedRectangle() {
+        const dimensions = validateTypedDimensions();
+        if (!dimensions) return;
+        clearDraft();
+        clearCompleted();
+        clearTyped();
+
+        const center = map.getCenter();
+        const lengthMeters = dimensions.length * 0.3048;
+        const widthMeters = dimensions.width * 0.3048;
+        const latDelta = (lengthMeters / 111320) / 2;
+        const lonDelta = (widthMeters / (111320 * Math.cos(center.lat * Math.PI / 180))) / 2;
+        const corners = [
+          [center.lat - latDelta, center.lng - lonDelta],
+          [center.lat - latDelta, center.lng + lonDelta],
+          [center.lat + latDelta, center.lng + lonDelta],
+          [center.lat + latDelta, center.lng - lonDelta]
+        ];
+        typedPolygon = L.polygon(corners, {
+          color: '#1877a7',
+          weight: 3,
+          fillColor: '#f8c64b',
+          fillOpacity: 0.28
+        }).addTo(map);
+        map.fitBounds(typedPolygon.getBounds(), { padding: [35, 35], maxZoom: 20 });
+        currentSlabArea = dimensions.length * dimensions.width;
+        updateMapAndCalculations();
+        setHint('Drag a corner or enter dimensions.');
+      }
+
+      function enterTypedMode() {
+        setModeActive('typed');
+        clearDraft();
+        clearCompleted();
+        drawing = false;
+        drawButton.textContent = 'Draw slab';
+        drawTypedRectangle();
+      }
+
+      typedModeButton.addEventListener('click', enterTypedMode);
+      lengthInput.addEventListener('input', () => {
+        if (mode !== 'typed') enterTypedMode();
+        else drawTypedRectangle();
+      });
+      widthInput.addEventListener('input', () => {
+        if (mode !== 'typed') enterTypedMode();
+        else drawTypedRectangle();
+      });
+      [
+        thicknessInput,
+        wasteInput,
+        capacityInput,
+        travelInput,
+        placementInput,
+        washoutInput,
+        arrivalInput
+      ].forEach(input => {
+        input.addEventListener('input', updateMapAndCalculations);
+      });
+
+      showCompletedPolygon(EXAMPLE_CORNERS.map(([lat, lng]) => L.latLng(lat, lng)));
+      map.fitBounds(completedPolygon.getBounds(), { padding: [40, 40] });
+      setHint('Drag a corner or enter dimensions.');
+      map.invalidateSize();
+      setTimeout(() => map.invalidateSize(), 100);
+    })();
+  </script>
+</body>
+</html>
